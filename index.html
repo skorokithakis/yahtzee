@@ -1,0 +1,887 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Yahtzee Scorecard</title>
+  <style>
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f5f5f5;
+      color: #222;
+      min-height: 100vh;
+    }
+
+    /* ── Screen management ── */
+    .screen { display: none; }
+    .screen.active { display: block; }
+
+    /* ── Join screen ── */
+    #join-screen {
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 24px;
+      gap: 24px;
+    }
+
+    #join-screen.active {
+      display: flex;
+    }
+
+    #join-screen h1 {
+      font-size: 2rem;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+
+    .join-card {
+      background: #fff;
+      border-radius: 12px;
+      padding: 32px 24px;
+      width: 100%;
+      max-width: 360px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.10);
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .join-card label {
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: #555;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    #room-code {
+      font-size: 1.5rem;
+      font-weight: 700;
+      letter-spacing: 0.2em;
+      text-align: center;
+      text-transform: uppercase;
+      border: 2px solid #ccc;
+      border-radius: 8px;
+      padding: 12px;
+      width: 100%;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    #room-code:focus {
+      border-color: #4a90e2;
+    }
+
+    #join-btn {
+      background: #4a90e2;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 14px;
+      font-size: 1.1rem;
+      font-weight: 600;
+      cursor: pointer;
+      width: 100%;
+      transition: background 0.2s;
+      min-height: 48px;
+    }
+
+    #join-btn:hover {
+      background: #357abd;
+    }
+
+    #join-btn:active {
+      background: #2a6099;
+    }
+
+    #join-error {
+      color: #c0392b;
+      font-size: 0.9rem;
+      text-align: center;
+      min-height: 1.2em;
+    }
+
+    /* ── Scorecard screen ── */
+    #scorecard-screen {
+      padding: 0 0 32px;
+    }
+
+    .scorecard-header {
+      background: #4a90e2;
+      color: #fff;
+      padding: 8px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    .scorecard-header h1 {
+      font-size: 1.2rem;
+      font-weight: 700;
+    }
+
+    #room-label {
+      font-size: 0.85rem;
+      opacity: 0.85;
+      letter-spacing: 0.1em;
+    }
+
+    /* ── Scorecard table ── */
+    .scorecard-wrap {
+      overflow-x: auto;
+      padding: 0;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 320px;
+      table-layout: fixed;
+    }
+
+    col.col-label { width: 38%; }
+    col.col-player { width: 31%; }
+
+    thead th {
+      background: #e8f0fb;
+      padding: 4px 6px;
+      font-size: 0.8rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #444;
+      border-bottom: 2px solid #c5d5ea;
+    }
+
+    thead th:first-child {
+      text-align: left;
+      padding-left: 12px;
+    }
+
+    .player-name-input {
+      font-size: 0.85rem;
+      font-weight: 700;
+      text-align: center;
+      border: none;
+      background: transparent;
+      width: 100%;
+      color: #333;
+      outline: none;
+      padding: 2px 4px;
+      border-bottom: 1px dashed #aaa;
+      min-height: 28px;
+    }
+
+    .player-name-input:focus {
+      border-bottom-color: #4a90e2;
+    }
+
+    /* ── Table rows ── */
+    tbody tr {
+      border-bottom: 1px solid #e0e0e0;
+    }
+
+    tbody tr:last-child {
+      border-bottom: none;
+    }
+
+    tbody tr:nth-child(even) {
+      background: #fafafa;
+    }
+
+    .section-header td {
+      background: #dce8f8;
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #4a6fa5;
+      padding: 4px 12px;
+    }
+
+    td.row-label {
+      padding: 2px 4px 2px 12px;
+      font-size: 0.8rem;
+      color: #333;
+      vertical-align: middle;
+    }
+
+    td.row-cell {
+      padding: 2px 6px;
+      text-align: center;
+      vertical-align: middle;
+    }
+
+    /* ── Editable inputs ── */
+    input[type="number"].score-input {
+      width: 100%;
+      min-height: 32px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      text-align: center;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      padding: 0;
+      background: #fff;
+      outline: none;
+      -moz-appearance: textfield;
+      appearance: textfield;
+    }
+
+    input[type="number"].score-input::-webkit-inner-spin-button,
+    input[type="number"].score-input::-webkit-outer-spin-button {
+      -webkit-appearance: none;
+    }
+
+    input[type="number"].score-input:focus {
+      border-color: #4a90e2;
+      box-shadow: 0 0 0 2px rgba(74,144,226,0.2);
+    }
+
+    /* ── Checkboxes ── */
+    .checkbox-wrap {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 2px;
+    }
+
+    input[type="checkbox"].score-check {
+      width: 22px;
+      height: 22px;
+      cursor: pointer;
+      accent-color: #4a90e2;
+    }
+
+    input[type="checkbox"].score-check.yb {
+      width: 16px;
+      height: 16px;
+    }
+
+    /* ── Read-only / calculated cells ── */
+    .calc-cell {
+      background: #ececec;
+      font-size: 0.9rem;
+      font-weight: 700;
+      color: #444;
+      min-height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 6px;
+      border: 1px solid #d5d5d5;
+    }
+
+    /* Grand total row */
+    tr.grand-total-row {
+      background: #4a90e2 !important;
+    }
+
+    tr.grand-total-row td.row-label {
+      color: #fff;
+      font-weight: 700;
+      font-size: 1rem;
+    }
+
+    tr.grand-total-row .calc-cell {
+      background: #357abd;
+      border-color: #2a6099;
+      color: #fff;
+      font-size: 1rem;
+    }
+
+    /* Bonus row highlight when earned */
+    .bonus-earned {
+      color: #27ae60 !important;
+    }
+
+    /* ── Sync status indicator ── */
+    #sync-status {
+      font-size: 0.75rem;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+    }
+
+    #sync-status.synced   { background: rgba(255,255,255,0.25); color: #fff; }
+    #sync-status.syncing  { background: rgba(255,255,255,0.15); color: #ffe; }
+    #sync-status.error    { background: rgba(220,50,50,0.5);    color: #fff; }
+  </style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════
+     Screen 1: Room Join
+══════════════════════════════════════════ -->
+<div id="join-screen" class="screen active">
+  <h1>🎲 Yahtzee</h1>
+  <div class="join-card">
+    <label for="room-code">Room Code</label>
+    <input
+      id="room-code"
+      type="text"
+      maxlength="5"
+      placeholder="ABCD1"
+      autocomplete="off"
+      autocorrect="off"
+      autocapitalize="characters"
+      spellcheck="false"
+    />
+    <button id="join-btn">Join</button>
+    <div id="join-error" role="alert" aria-live="polite"></div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     Screen 2: Scorecard
+══════════════════════════════════════════ -->
+<div id="scorecard-screen" class="screen">
+  <div class="scorecard-header">
+    <h1>🎲 Yahtzee</h1>
+    <span id="room-label"></span>
+    <span id="sync-status" class="synced">●&nbsp;Live</span>
+  </div>
+
+  <div class="scorecard-wrap">
+    <table>
+      <colgroup>
+        <col class="col-label" />
+        <col class="col-player" />
+        <col class="col-player" />
+      </colgroup>
+      <thead>
+        <tr>
+          <th></th>
+          <th><input class="player-name-input" id="p1_name" type="text" value="Player 1" maxlength="20" /></th>
+          <th><input class="player-name-input" id="p2_name" type="text" value="Player 2" maxlength="20" /></th>
+        </tr>
+      </thead>
+      <tbody>
+
+        <!-- Upper section header -->
+        <tr class="section-header">
+          <td colspan="3">Upper Section</td>
+        </tr>
+
+        <!-- Ones -->
+        <tr>
+          <td class="row-label">Ones</td>
+          <td class="row-cell"><input class="score-input" id="p1_ones" type="number" min="0" max="5" placeholder="—" /></td>
+          <td class="row-cell"><input class="score-input" id="p2_ones" type="number" min="0" max="5" placeholder="—" /></td>
+        </tr>
+
+        <!-- Twos -->
+        <tr>
+          <td class="row-label">Twos</td>
+          <td class="row-cell"><input class="score-input" id="p1_twos" type="number" min="0" max="10" placeholder="—" /></td>
+          <td class="row-cell"><input class="score-input" id="p2_twos" type="number" min="0" max="10" placeholder="—" /></td>
+        </tr>
+
+        <!-- Threes -->
+        <tr>
+          <td class="row-label">Threes</td>
+          <td class="row-cell"><input class="score-input" id="p1_threes" type="number" min="0" max="15" placeholder="—" /></td>
+          <td class="row-cell"><input class="score-input" id="p2_threes" type="number" min="0" max="15" placeholder="—" /></td>
+        </tr>
+
+        <!-- Fours -->
+        <tr>
+          <td class="row-label">Fours</td>
+          <td class="row-cell"><input class="score-input" id="p1_fours" type="number" min="0" max="20" placeholder="—" /></td>
+          <td class="row-cell"><input class="score-input" id="p2_fours" type="number" min="0" max="20" placeholder="—" /></td>
+        </tr>
+
+        <!-- Fives -->
+        <tr>
+          <td class="row-label">Fives</td>
+          <td class="row-cell"><input class="score-input" id="p1_fives" type="number" min="0" max="25" placeholder="—" /></td>
+          <td class="row-cell"><input class="score-input" id="p2_fives" type="number" min="0" max="25" placeholder="—" /></td>
+        </tr>
+
+        <!-- Sixes -->
+        <tr>
+          <td class="row-label">Sixes</td>
+          <td class="row-cell"><input class="score-input" id="p1_sixes" type="number" min="0" max="30" placeholder="—" /></td>
+          <td class="row-cell"><input class="score-input" id="p2_sixes" type="number" min="0" max="30" placeholder="—" /></td>
+        </tr>
+
+        <!-- Upper Sum -->
+        <tr>
+          <td class="row-label">Upper Sum</td>
+          <td class="row-cell"><div class="calc-cell" id="p1_upper_sum">0</div></td>
+          <td class="row-cell"><div class="calc-cell" id="p2_upper_sum">0</div></td>
+        </tr>
+
+        <!-- Bonus -->
+        <tr>
+          <td class="row-label">Bonus <small>(≥63)</small></td>
+          <td class="row-cell"><div class="calc-cell" id="p1_bonus">0</div></td>
+          <td class="row-cell"><div class="calc-cell" id="p2_bonus">0</div></td>
+        </tr>
+
+        <!-- Lower section header -->
+        <tr class="section-header">
+          <td colspan="3">Lower Section</td>
+        </tr>
+
+        <!-- Three of a Kind -->
+        <tr>
+          <td class="row-label">Three of a Kind</td>
+          <td class="row-cell"><input class="score-input" id="p1_three_of_a_kind" type="number" min="0" placeholder="—" /></td>
+          <td class="row-cell"><input class="score-input" id="p2_three_of_a_kind" type="number" min="0" placeholder="—" /></td>
+        </tr>
+
+        <!-- Four of a Kind -->
+        <tr>
+          <td class="row-label">Four of a Kind</td>
+          <td class="row-cell"><input class="score-input" id="p1_four_of_a_kind" type="number" min="0" placeholder="—" /></td>
+          <td class="row-cell"><input class="score-input" id="p2_four_of_a_kind" type="number" min="0" placeholder="—" /></td>
+        </tr>
+
+        <!-- Full House -->
+        <tr>
+          <td class="row-label">Full House <small>(25)</small></td>
+          <td class="row-cell"><div class="checkbox-wrap"><input class="score-check" id="p1_full_house" type="checkbox" /></div></td>
+          <td class="row-cell"><div class="checkbox-wrap"><input class="score-check" id="p2_full_house" type="checkbox" /></div></td>
+        </tr>
+
+        <!-- Small Straight -->
+        <tr>
+          <td class="row-label">Sm. Straight <small>(30)</small></td>
+          <td class="row-cell"><div class="checkbox-wrap"><input class="score-check" id="p1_small_straight" type="checkbox" /></div></td>
+          <td class="row-cell"><div class="checkbox-wrap"><input class="score-check" id="p2_small_straight" type="checkbox" /></div></td>
+        </tr>
+
+        <!-- Large Straight -->
+        <tr>
+          <td class="row-label">Lg. Straight <small>(40)</small></td>
+          <td class="row-cell"><div class="checkbox-wrap"><input class="score-check" id="p1_large_straight" type="checkbox" /></div></td>
+          <td class="row-cell"><div class="checkbox-wrap"><input class="score-check" id="p2_large_straight" type="checkbox" /></div></td>
+        </tr>
+
+        <!-- Yahtzee -->
+        <tr>
+          <td class="row-label">Yahtzee <small>(50)</small></td>
+          <td class="row-cell"><div class="checkbox-wrap"><input class="score-check" id="p1_yahtzee" type="checkbox" /></div></td>
+          <td class="row-cell"><div class="checkbox-wrap"><input class="score-check" id="p2_yahtzee" type="checkbox" /></div></td>
+        </tr>
+
+        <!-- Yahtzee Bonus -->
+        <tr>
+          <td class="row-label">Bonus <small>(5 × 100)</small></td>
+          <td class="row-cell">
+            <div class="checkbox-wrap">
+              <input class="score-check yb" id="p1_ybonus1" type="checkbox" />
+              <input class="score-check yb" id="p1_ybonus2" type="checkbox" />
+              <input class="score-check yb" id="p1_ybonus3" type="checkbox" />
+              <input class="score-check yb" id="p1_ybonus4" type="checkbox" />
+              <input class="score-check yb" id="p1_ybonus5" type="checkbox" />
+            </div>
+          </td>
+          <td class="row-cell">
+            <div class="checkbox-wrap">
+              <input class="score-check yb" id="p2_ybonus1" type="checkbox" />
+              <input class="score-check yb" id="p2_ybonus2" type="checkbox" />
+              <input class="score-check yb" id="p2_ybonus3" type="checkbox" />
+              <input class="score-check yb" id="p2_ybonus4" type="checkbox" />
+              <input class="score-check yb" id="p2_ybonus5" type="checkbox" />
+            </div>
+          </td>
+        </tr>
+
+        <!-- Chance -->
+        <tr>
+          <td class="row-label">Chance</td>
+          <td class="row-cell"><input class="score-input" id="p1_chance" type="number" min="0" placeholder="—" /></td>
+          <td class="row-cell"><input class="score-input" id="p2_chance" type="number" min="0" placeholder="—" /></td>
+        </tr>
+
+        <!-- Lower Sum -->
+        <tr>
+          <td class="row-label">Lower Sum</td>
+          <td class="row-cell"><div class="calc-cell" id="p1_lower_sum">0</div></td>
+          <td class="row-cell"><div class="calc-cell" id="p2_lower_sum">0</div></td>
+        </tr>
+
+        <!-- Grand Total -->
+        <tr class="grand-total-row">
+          <td class="row-label">Grand Total</td>
+          <td class="row-cell"><div class="calc-cell" id="p1_grand_total">0</div></td>
+          <td class="row-cell"><div class="calc-cell" id="p2_grand_total">0</div></td>
+        </tr>
+
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  // ── Constants ──────────────────────────────────────────────────────────────
+  const GWEET_BASE = 'https://gweet.stavros.io';
+  const DEBOUNCE_MS = 300;
+
+  // Editable field IDs (state keys) — order matters for serialisation
+  const UPPER_NUMBER_FIELDS = ['ones', 'twos', 'threes', 'fours', 'fives', 'sixes'];
+  const LOWER_NUMBER_FIELDS = ['three_of_a_kind', 'four_of_a_kind', 'chance'];
+  const CHECKBOX_FIELDS     = ['full_house', 'small_straight', 'large_straight', 'yahtzee'];
+  const CHECKBOX_VALUES     = { full_house: 25, small_straight: 30, large_straight: 40, yahtzee: 50 };
+  const YBONUS_FIELDS       = ['ybonus1', 'ybonus2', 'ybonus3', 'ybonus4', 'ybonus5'];
+  const NAME_FIELDS         = ['p1_name', 'p2_name'];
+
+  // ── State ──────────────────────────────────────────────────────────────────
+  let roomCode = '';
+  let isApplyingRemote = false;
+  let debounceTimer = null;
+  let streamReader = null;
+  let lastPostTime = 0;
+
+  // ── DOM helpers ────────────────────────────────────────────────────────────
+  const $ = id => document.getElementById(id);
+
+  function showScreen(id) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    $(id).classList.add('active');
+  }
+
+  function setSyncStatus(state) {
+    const el = $('sync-status');
+    el.className = state;
+    const labels = { synced: '● Live', syncing: '↑ Syncing…', error: '✕ Error' };
+    el.textContent = labels[state] || '● Live';
+  }
+
+  // ── Score calculation ──────────────────────────────────────────────────────
+  function numVal(id) {
+    const el = $(id);
+    if (!el) return 0;
+    const v = parseFloat(el.value);
+    return isNaN(v) ? 0 : v;
+  }
+
+  function checkVal(id) {
+    const el = $(id);
+    return el && el.checked ? 1 : 0;
+  }
+
+  function recalculate() {
+    ['p1', 'p2'].forEach(p => {
+      // Upper sum
+      const upperSum = UPPER_NUMBER_FIELDS.reduce((acc, f) => acc + numVal(`${p}_${f}`), 0);
+      $(p + '_upper_sum').textContent = upperSum;
+
+      // Bonus
+      const bonus = upperSum >= 63 ? 35 : 0;
+      const bonusEl = $(p + '_bonus');
+      bonusEl.textContent = bonus > 0 ? 35 : (upperSum - 63);
+      bonusEl.classList.toggle('bonus-earned', bonus > 0);
+
+      // Lower sum
+      const lowerNum = LOWER_NUMBER_FIELDS.reduce((acc, f) => acc + numVal(`${p}_${f}`), 0);
+      const lowerCheck = CHECKBOX_FIELDS.reduce((acc, f) => acc + checkVal(`${p}_${f}`) * CHECKBOX_VALUES[f], 0);
+      const yahtzeeBonus = YBONUS_FIELDS.reduce((acc, f) => acc + checkVal(`${p}_${f}`) * 100, 0);
+      const lowerSum = lowerNum + lowerCheck + yahtzeeBonus;
+      $(p + '_lower_sum').textContent = lowerSum;
+
+      // Grand total
+      $(p + '_grand_total').textContent = upperSum + bonus + lowerSum;
+    });
+  }
+
+  // ── State serialisation ────────────────────────────────────────────────────
+  function getState() {
+    const state = {};
+    NAME_FIELDS.forEach(key => {
+      state[key] = $(key).value;
+    });
+    [...UPPER_NUMBER_FIELDS, ...LOWER_NUMBER_FIELDS].forEach(f => {
+      ['p1', 'p2'].forEach(p => {
+        state[`${p}_${f}`] = $(p + '_' + f).value;
+      });
+    });
+    CHECKBOX_FIELDS.forEach(f => {
+      ['p1', 'p2'].forEach(p => {
+        state[`${p}_${f}`] = $(`${p}_${f}`).checked ? '1' : '0';
+      });
+    });
+    YBONUS_FIELDS.forEach(f => {
+      ['p1', 'p2'].forEach(p => {
+        state[`${p}_${f}`] = $(`${p}_${f}`).checked ? '1' : '0';
+      });
+    });
+    return state;
+  }
+
+  function applyState(state) {
+    isApplyingRemote = true;
+    try {
+      NAME_FIELDS.forEach(key => {
+        if (state[key] !== undefined) $(key).value = state[key];
+      });
+      [...UPPER_NUMBER_FIELDS, ...LOWER_NUMBER_FIELDS].forEach(f => {
+        ['p1', 'p2'].forEach(p => {
+          const key = `${p}_${f}`;
+          if (state[key] !== undefined) $(key).value = state[key];
+        });
+      });
+      CHECKBOX_FIELDS.forEach(f => {
+        ['p1', 'p2'].forEach(p => {
+          const key = `${p}_${f}`;
+          if (state[key] !== undefined) $(`${p}_${f}`).checked = state[key] === '1' || state[key] === true || state[key] === 1;
+        });
+      });
+      YBONUS_FIELDS.forEach(f => {
+        ['p1', 'p2'].forEach(p => {
+          const key = `${p}_${f}`;
+          if (state[key] !== undefined) $(`${p}_${f}`).checked = state[key] === '1' || state[key] === true || state[key] === 1;
+        });
+      });
+      recalculate();
+    } finally {
+      isApplyingRemote = false;
+    }
+  }
+
+  // ── Gweet helpers ──────────────────────────────────────────────────────────
+  function extractGweetValues(values) {
+    const state = {};
+    for (const [k, v] of Object.entries(values)) {
+      state[k] = Array.isArray(v) ? v[0] : v;
+    }
+    return state;
+  }
+
+  // ── Gweet API ──────────────────────────────────────────────────────────────
+  async function postState() {
+    setSyncStatus('syncing');
+    lastPostTime = Date.now();
+    const state = getState();
+    const body = new URLSearchParams(state).toString();
+    try {
+      await fetch(`${GWEET_BASE}/stream/${roomCode}/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body,
+      });
+      setSyncStatus('synced');
+    } catch (err) {
+      console.error('Gweet POST error:', err);
+      setSyncStatus('error');
+    }
+  }
+
+  async function loadLatestState() {
+    try {
+      const res = await fetch(`${GWEET_BASE}/stream/${roomCode}/?latest=1`);
+      if (!res.ok) return;
+      const data = await res.json();
+      // Gweet returns: {"messages":[{"created":"...","name":"...","values":{...}}]}
+      // Each value in "values" is an array — take the first element.
+      if (data && data.messages && data.messages.length > 0) {
+        const msg = data.messages[0];
+        const age = Date.now() - new Date(msg.created).getTime();
+        if (age < 3600000 && msg.values && typeof msg.values === 'object') {
+          applyState(extractGweetValues(msg.values));
+        }
+      }
+    } catch (err) {
+      console.warn('Could not load latest state:', err);
+    }
+  }
+
+  async function startStreaming() {
+    // Cancel any existing stream
+    if (streamReader) {
+      try { streamReader.cancel(); } catch (_) {}
+      streamReader = null;
+    }
+
+    try {
+      const res = await fetch(`${GWEET_BASE}/stream/${roomCode}/?streaming=1`);
+      if (!res.ok || !res.body) return;
+
+      streamReader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await streamReader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+
+        // Parse all complete JSON objects from the buffer.
+        // They may be newline-delimited or concatenated.
+        let start = 0;
+        while (start < buffer.length) {
+          // Skip whitespace / newlines
+          while (start < buffer.length && /\s/.test(buffer[start])) start++;
+          if (start >= buffer.length) break;
+
+          if (buffer[start] !== '{') {
+            // Unexpected character — skip to next newline
+            const nl = buffer.indexOf('\n', start);
+            start = nl === -1 ? buffer.length : nl + 1;
+            continue;
+          }
+
+          // Find the matching closing brace
+          let depth = 0;
+          let end = start;
+          let inString = false;
+          let escape = false;
+          for (; end < buffer.length; end++) {
+            const ch = buffer[end];
+            if (escape) { escape = false; continue; }
+            if (ch === '\\' && inString) { escape = true; continue; }
+            if (ch === '"') { inString = !inString; continue; }
+            if (inString) continue;
+            if (ch === '{') depth++;
+            else if (ch === '}') { depth--; if (depth === 0) { end++; break; } }
+          }
+
+          if (depth !== 0) {
+            // Incomplete JSON — wait for more data
+            buffer = buffer.slice(start);
+            break;
+          }
+
+          const chunk = buffer.slice(start, end);
+          start = end;
+
+          try {
+            const parsed = JSON.parse(chunk);
+            // Gweet streaming sends two formats:
+            // 1. Bare event:   {"created":"...","name":"...","values":{...}}
+            // 2. POST echo:    {"message":{"created":"...","name":"...","values":{...}},"status":"success"}
+            let values = null;
+            if (parsed.message && parsed.message.values && typeof parsed.message.values === 'object') {
+              values = parsed.message.values;
+            } else if (parsed.values && typeof parsed.values === 'object') {
+              values = parsed.values;
+            }
+            if (values) {
+              if (Date.now() - lastPostTime < 500) continue; // skip self-echo
+              applyState(extractGweetValues(values));
+            }
+          } catch (e) {
+            console.warn('Failed to parse stream chunk:', chunk, e);
+          }
+        }
+
+        if (start >= buffer.length) buffer = '';
+      }
+    } catch (err) {
+      if (err.name !== 'AbortError') {
+        console.warn('Stream error, will retry in 3s:', err);
+        setSyncStatus('error');
+        setTimeout(startStreaming, 3000);
+      }
+    }
+  }
+
+  // ── Input change handler ───────────────────────────────────────────────────
+  function onInputChange() {
+    if (isApplyingRemote) return;
+    recalculate();
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(postState, DEBOUNCE_MS);
+  }
+
+  // ── Wire up all editable inputs ────────────────────────────────────────────
+  function attachListeners() {
+    // Number inputs and name inputs
+    [...NAME_FIELDS,
+     ...UPPER_NUMBER_FIELDS.flatMap(f => [`p1_${f}`, `p2_${f}`]),
+     ...LOWER_NUMBER_FIELDS.flatMap(f => [`p1_${f}`, `p2_${f}`]),
+    ].forEach(id => {
+      const el = $(id);
+      if (el) el.addEventListener('input', onInputChange);
+    });
+
+    // Checkboxes
+    CHECKBOX_FIELDS.flatMap(f => [`p1_${f}`, `p2_${f}`]).forEach(id => {
+      const el = $(id);
+      if (el) el.addEventListener('change', onInputChange);
+    });
+
+    // Yahtzee bonus checkboxes
+    YBONUS_FIELDS.flatMap(f => [`p1_${f}`, `p2_${f}`]).forEach(id => {
+      const el = $(id);
+      if (el) el.addEventListener('change', onInputChange);
+    });
+  }
+
+  // ── Room code input: enforce uppercase alphanumeric ────────────────────────
+  const roomCodeInput = $('room-code');
+  roomCodeInput.addEventListener('input', () => {
+    const cleaned = roomCodeInput.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    roomCodeInput.value = cleaned;
+  });
+
+  // ── Join button ────────────────────────────────────────────────────────────
+  $('join-btn').addEventListener('click', async () => {
+    const code = roomCodeInput.value.trim().toUpperCase();
+    const errorEl = $('join-error');
+
+    if (code.length !== 5) {
+      errorEl.textContent = 'Please enter a 5-character room code.';
+      return;
+    }
+    if (!/^[A-Z0-9]{5}$/.test(code)) {
+      errorEl.textContent = 'Room code must be letters and numbers only.';
+      return;
+    }
+
+    errorEl.textContent = '';
+    roomCode = code;
+    $('room-label').textContent = `Room: ${code}`;
+
+    showScreen('scorecard-screen');
+    attachListeners();
+    recalculate();
+    requestWakeLock();
+
+    await loadLatestState();
+    startStreaming();
+  });
+
+  // Allow pressing Enter in the room code input
+  roomCodeInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter') $('join-btn').click();
+  });
+
+  // ── Screen Wake Lock ──────────────────────────────────────────────────────
+  let wakeLock = null;
+
+  async function requestWakeLock() {
+    if (!('wakeLock' in navigator)) return;
+    try {
+      wakeLock = await navigator.wakeLock.request('screen');
+      wakeLock.addEventListener('release', () => { wakeLock = null; });
+    } catch (_) {}
+  }
+
+  // Re-acquire wake lock when tab becomes visible again
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && roomCode) requestWakeLock();
+  });
+
+})();
+</script>
+</body>
+</html>
