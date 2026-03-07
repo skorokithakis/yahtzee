@@ -1029,16 +1029,13 @@
       let buffer = '';
       let receivedData = false;
 
+      // Connection established — show as live
+      streamBackoff = STREAM_BACKOFF_INITIAL;
+      setSyncStatus('synced');
+
       while (true) {
         const { done, value } = await streamReader.read();
         if (done) break;
-
-        // Reset backoff on first successful data receipt
-        if (!receivedData) {
-          receivedData = true;
-          streamBackoff = STREAM_BACKOFF_INITIAL;
-          setSyncStatus('synced');
-        }
 
         buffer += decoder.decode(value, { stream: true });
 
