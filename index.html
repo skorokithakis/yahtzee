@@ -891,6 +891,9 @@
     clearTimeout(celebrationTimer);
     if (isGameComplete() && !celebrationShown) {
       celebrationTimer = setTimeout(showCelebration, 1000);
+    } else if (!isGameComplete() && celebrationShown) {
+      hideCelebration();
+      celebrationShown = false;
     }
   }
 
