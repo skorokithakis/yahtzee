@@ -720,6 +720,7 @@
   let lastPostTime = 0;
   let lastFilledPlayer = null;
   let celebrationShown = false;
+  let celebrationTimer = null;
   let streamBackoff = STREAM_BACKOFF_INITIAL;
   let streamReconnectTimer = null;
 
@@ -877,9 +878,10 @@
     });
     updateActivePlayer();
 
-    // Check for game completion
+    // Check for game completion (delay to allow correcting the last entry)
+    clearTimeout(celebrationTimer);
     if (isGameComplete() && !celebrationShown) {
-      showCelebration();
+      celebrationTimer = setTimeout(showCelebration, 1000);
     }
   }
 
@@ -1126,6 +1128,7 @@
   function clearScores() {
     if (!confirm('Start a new game? All scores will be cleared.')) return;
 
+    clearTimeout(celebrationTimer);
     hideCelebration();
     celebrationShown = false;
 
