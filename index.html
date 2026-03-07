@@ -4,7 +4,6 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Yahtzee Scorecard</title>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/nosleep/0.12.0/NoSleep.min.js" integrity="sha512-DSzvYfxJWRi3E6vfcGQfL5CqOlApxYrrdqRP3hRCnoiZ0oM6+ccYjbtdzQFUrAOI/ehKk0VKFuKs5GseGPkVjQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <style>
     *, *::before, *::after {
       box-sizing: border-box;
@@ -1281,13 +1280,18 @@
 
   // ── Wire up all editable inputs ────────────────────────────────────────────
   function attachListeners() {
-    // Number inputs and name inputs
-    [...NAME_FIELDS,
-     ...UPPER_NUMBER_FIELDS.flatMap(f => [`p1_${f}`, `p2_${f}`]),
+    // Name inputs — update live on every keystroke
+    NAME_FIELDS.forEach(id => {
+      const el = $(id);
+      if (el) el.addEventListener('input', () => onInputChange(id));
+    });
+
+    // Score number inputs — update on blur so the player can finish typing
+    [...UPPER_NUMBER_FIELDS.flatMap(f => [`p1_${f}`, `p2_${f}`]),
      ...LOWER_NUMBER_FIELDS.flatMap(f => [`p1_${f}`, `p2_${f}`]),
     ].forEach(id => {
       const el = $(id);
-      if (el) el.addEventListener('input', () => onInputChange(id));
+      if (el) el.addEventListener('blur', () => onInputChange(id));
     });
 
     // Tri-state toggles
@@ -1365,27 +1369,16 @@
   }
 
   // ── Screen Wake Lock ──────────────────────────────────────────────────────
-  // Use the native Wake Lock API where available, fall back to NoSleep.js
-  // (plays a tiny invisible video) for browsers that lack it (e.g. Chrome on iOS).
   let wakeLock = null;
-  const noSleep = ('wakeLock' in navigator) ? null : new NoSleep();
 
   async function requestWakeLock() {
-    if (noSleep) {
-      try { noSleep.enable(); } catch (_) {}
-      return;
-    }
     try {
       wakeLock = await navigator.wakeLock.request('screen');
-      wakeLock.addEventListener('release', () => { wakeLock = null; });
-    } catch (_) {}
+      wakeLock.addEventListener('release', () => { console.log('Wake lock released'); wakeLock = null; });
+    } catch (err) { console.warn('Wake lock failed:', err.name, err.message); }
   }
 
   function releaseWakeLock() {
-    if (noSleep) {
-      noSleep.disable();
-      return;
-    }
     if (wakeLock) {
       wakeLock.release();
       wakeLock = null;
