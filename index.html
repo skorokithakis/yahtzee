@@ -359,9 +359,10 @@
       letter-spacing: 0.04em;
     }
 
-    #sync-status.synced   { background: rgba(255,255,255,0.25); color: #fff; }
-    #sync-status.syncing  { background: rgba(255,255,255,0.15); color: #ffe; }
-    #sync-status.error    { background: rgba(220,50,50,0.5);    color: #fff; }
+    #sync-status.synced        { background: rgba(255,255,255,0.25); color: #fff; }
+    #sync-status.syncing       { background: rgba(255,255,255,0.15); color: #ffe; }
+    #sync-status.error         { background: rgba(220,50,50,0.5);    color: #fff; }
+    #sync-status.reconnecting  { background: rgba(255,180,50,0.5);   color: #fff; }
 
     /* ── Header right group ── */
     .header-right {
@@ -696,6 +697,9 @@
   // ── Constants ──────────────────────────────────────────────────────────────
   const GWEET_BASE = 'https://gweet.stavros.io';
   const DEBOUNCE_MS = 300;
+  const STREAM_BACKOFF_INITIAL    = 1000;
+  const STREAM_BACKOFF_MAX        = 30000;
+  const STREAM_BACKOFF_MULTIPLIER = 2;
 
   // Editable field IDs (state keys) — order matters for serialisation
   const UPPER_NUMBER_FIELDS = ['ones', 'twos', 'threes', 'fours', 'fives', 'sixes'];
@@ -717,6 +721,8 @@
   let lastPostTime = 0;
   let lastFilledPlayer = null;
   let celebrationShown = false;
+  let streamBackoff = STREAM_BACKOFF_INITIAL;
+  let streamReconnectTimer = null;
 
   // ── DOM helpers ────────────────────────────────────────────────────────────
   const $ = id => document.getElementById(id);
@@ -729,7 +735,7 @@
   function setSyncStatus(state) {
     const el = $('sync-status');
     el.className = state;
-    const labels = { synced: '● Live', syncing: '↑ Syncing…', error: '✕ Error' };
+    const labels = { synced: '● Live', syncing: '↑ Syncing…', error: '✕ Error', reconnecting: '↻ Reconnecting…' };
     el.textContent = labels[state] || '● Live';
   }
 
@@ -999,23 +1005,41 @@
   }
 
   async function startStreaming() {
-    // Cancel any existing stream
+    // Cancel any pending reconnect timer and any existing stream
+    clearTimeout(streamReconnectTimer);
     if (streamReader) {
       try { streamReader.cancel(); } catch (_) {}
       streamReader = null;
     }
 
+    function scheduleReconnect() {
+      setSyncStatus('reconnecting');
+      streamReconnectTimer = setTimeout(startStreaming, streamBackoff);
+      streamBackoff = Math.min(streamBackoff * STREAM_BACKOFF_MULTIPLIER, STREAM_BACKOFF_MAX);
+    }
+
     try {
       const res = await fetch(`${GWEET_BASE}/stream/${roomCode}/?streaming=1`);
-      if (!res.ok || !res.body) return;
+      if (!res.ok || !res.body) {
+        scheduleReconnect();
+        return;
+      }
 
       streamReader = res.body.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
+      let receivedData = false;
 
       while (true) {
         const { done, value } = await streamReader.read();
         if (done) break;
+
+        // Reset backoff on first successful data receipt
+        if (!receivedData) {
+          receivedData = true;
+          streamBackoff = STREAM_BACKOFF_INITIAL;
+          setSyncStatus('synced');
+        }
 
         buffer += decoder.decode(value, { stream: true });
 
@@ -1080,11 +1104,13 @@
 
         if (start >= buffer.length) buffer = '';
       }
+
+      // Stream ended normally (done === true) — schedule reconnect
+      scheduleReconnect();
     } catch (err) {
       if (err.name !== 'AbortError') {
-        console.warn('Stream error, will retry in 3s:', err);
-        setSyncStatus('error');
-        setTimeout(startStreaming, 3000);
+        console.warn(`Stream error, will retry in ${streamBackoff}ms:`, err);
+        scheduleReconnect();
       }
     }
   }
