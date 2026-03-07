@@ -362,6 +362,25 @@
     #sync-status.syncing  { background: rgba(255,255,255,0.15); color: #ffe; }
     #sync-status.error    { background: rgba(220,50,50,0.5);    color: #fff; }
 
+    /* ── New Game button ── */
+    #new-game-btn {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: rgba(255,255,255,0.75);
+      background: transparent;
+      border: 1px solid rgba(255,255,255,0.35);
+      border-radius: 12px;
+      padding: 4px 10px;
+      cursor: pointer;
+      letter-spacing: 0.04em;
+    }
+
+    #new-game-btn:hover {
+      color: #fff;
+      border-color: rgba(255,255,255,0.65);
+      background: rgba(255,255,255,0.1);
+    }
+
     /* ── Validation ── */
     input[type="number"].score-input.invalid {
       border-color: #dc2828;
@@ -417,6 +436,7 @@
   <div class="scorecard-header">
     <h1>🎲 Yahtzee</h1>
     <span id="room-label"></span>
+    <button id="new-game-btn" type="button">New Game</button>
     <span id="sync-status" class="synced">●&nbsp;Live</span>
   </div>
 
@@ -998,6 +1018,25 @@
     debounceTimer = setTimeout(postState, DEBOUNCE_MS);
   }
 
+  // ── New Game ───────────────────────────────────────────────────────────────
+  function clearScores() {
+    if (!confirm('Start a new game? All scores will be cleared.')) return;
+
+    ['p1', 'p2'].forEach(p => {
+      UPPER_NUMBER_FIELDS.forEach(f => { $(`${p}_${f}`).value = ''; });
+      LOWER_NUMBER_FIELDS.forEach(f => { $(`${p}_${f}`).value = ''; });
+      CHECKBOX_FIELDS.forEach(f => {
+        const el = $(`${p}_${f}`);
+        el.dataset.state = 'empty';
+        el.textContent = '';
+      });
+      YBONUS_FIELDS.forEach(f => { $(`${p}_${f}`).checked = false; });
+    });
+
+    recalculate();
+    postState();
+  }
+
   // ── Wire up all editable inputs ────────────────────────────────────────────
   function attachListeners() {
     // Number inputs and name inputs
@@ -1023,6 +1062,9 @@
       const el = $(id);
       if (el) el.addEventListener('change', () => onInputChange(id));
     });
+
+    // New Game button
+    $('new-game-btn').addEventListener('click', clearScores);
   }
 
   // ── Room code input: enforce uppercase alphanumeric ────────────────────────
