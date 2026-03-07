@@ -411,6 +411,63 @@
       color: #1a7a40;
     }
 
+    /* ── Celebration overlay ── */
+    #celebration-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 1000;
+      background: rgba(0, 0, 0, 0.75);
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      cursor: pointer;
+    }
+
+    #celebration-overlay.active {
+      display: flex;
+      animation: celebration-fade-in 0.5s ease forwards;
+    }
+
+    @keyframes celebration-fade-in {
+      from { opacity: 0; }
+      to   { opacity: 1; }
+    }
+
+    #celebration-canvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+    }
+
+    #celebration-text {
+      position: relative;
+      z-index: 1;
+      color: #fff;
+      font-size: clamp(2rem, 8vw, 4rem);
+      font-weight: 800;
+      text-align: center;
+      padding: 0 24px;
+      text-shadow:
+        0 0 20px rgba(255, 220, 50, 0.9),
+        0 0 40px rgba(255, 180, 0, 0.6),
+        0 2px 8px rgba(0, 0, 0, 0.8);
+      letter-spacing: 0.02em;
+      line-height: 1.2;
+    }
+
+    #celebration-dismiss {
+      position: relative;
+      z-index: 1;
+      margin-top: 24px;
+      color: rgba(255, 255, 255, 0.65);
+      font-size: 0.9rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
   </style>
 </head>
 <body>
@@ -623,6 +680,15 @@
   </div>
 </div>
 
+<!-- ══════════════════════════════════════════
+     Celebration overlay
+══════════════════════════════════════════ -->
+<div id="celebration-overlay" role="dialog" aria-modal="true" aria-label="Game over celebration">
+  <canvas id="celebration-canvas"></canvas>
+  <div id="celebration-text"></div>
+  <div id="celebration-dismiss">Tap to dismiss</div>
+</div>
+
 <script>
 (function () {
   'use strict';
@@ -650,6 +716,7 @@
   let streamReader = null;
   let lastPostTime = 0;
   let lastFilledPlayer = null;
+  let celebrationShown = false;
 
   // ── DOM helpers ────────────────────────────────────────────────────────────
   const $ = id => document.getElementById(id);
@@ -804,6 +871,11 @@
       $(p + '_grand_total').textContent = upperSum + bonus + lowerSum;
     });
     updateActivePlayer();
+
+    // Check for game completion
+    if (isGameComplete() && !celebrationShown) {
+      showCelebration();
+    }
   }
 
   // ── State serialisation ────────────────────────────────────────────────────
@@ -1032,6 +1104,9 @@
   function clearScores() {
     if (!confirm('Start a new game? All scores will be cleared.')) return;
 
+    hideCelebration();
+    celebrationShown = false;
+
     ['p1', 'p2'].forEach(p => {
       UPPER_NUMBER_FIELDS.forEach(f => { $(`${p}_${f}`).value = ''; });
       LOWER_NUMBER_FIELDS.forEach(f => { $(`${p}_${f}`).value = ''; });
@@ -1046,6 +1121,137 @@
     recalculate();
     postState();
   }
+
+  // ── Celebration overlay ────────────────────────────────────────────────────
+  let fireworksRafId = null;
+  let fireworksBurstTimer = null;
+  const particles = [];
+
+  const FIREWORK_COLORS = [
+    '#ff4444', '#ff8800', '#ffdd00', '#44ff44',
+    '#44ddff', '#8844ff', '#ff44cc', '#ffffff',
+  ];
+
+  function spawnBurst() {
+    const canvas = $('celebration-canvas');
+    const x = Math.random() * canvas.width;
+    const y = Math.random() * canvas.height * 0.6; // upper 60%
+    const count = 30 + Math.floor(Math.random() * 21); // 30–50
+    const color = FIREWORK_COLORS[Math.floor(Math.random() * FIREWORK_COLORS.length)];
+    for (let i = 0; i < count; i++) {
+      const angle = (Math.PI * 2 * i) / count + (Math.random() - 0.5) * 0.3;
+      const speed = 2 + Math.random() * 4;
+      particles.push({
+        x, y,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        alpha: 1,
+        color,
+        radius: 2 + Math.random() * 2,
+      });
+    }
+  }
+
+  function fireworksLoop() {
+    const canvas = $('celebration-canvas');
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    for (let i = particles.length - 1; i >= 0; i--) {
+      const p = particles[i];
+      p.x  += p.vx;
+      p.y  += p.vy;
+      p.vy += 0.08; // gravity
+      p.vx *= 0.98; // air resistance
+      p.alpha -= 0.018;
+
+      if (p.alpha <= 0) {
+        particles.splice(i, 1);
+        continue;
+      }
+
+      ctx.save();
+      ctx.globalAlpha = p.alpha;
+      ctx.fillStyle = p.color;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    fireworksRafId = requestAnimationFrame(fireworksLoop);
+  }
+
+  function isGameComplete() {
+    for (const p of ['p1', 'p2']) {
+      for (const f of [...UPPER_NUMBER_FIELDS, ...LOWER_NUMBER_FIELDS]) {
+        if ($(`${p}_${f}`).value === '') return false;
+      }
+      for (const f of CHECKBOX_FIELDS) {
+        if ($(`${p}_${f}`).dataset.state === 'empty') return false;
+      }
+    }
+    return true;
+  }
+
+  function getWinnerText() {
+    const s1 = $('p1_grand_total').textContent;
+    const s2 = $('p2_grand_total').textContent;
+    const t1 = parseInt(s1, 10);
+    const t2 = parseInt(s2, 10);
+    if (isNaN(t1) || isNaN(t2)) return 'Game Over!';
+    const name1 = $('p1_name').value.trim() || 'Player 1';
+    const name2 = $('p2_name').value.trim() || 'Player 2';
+    if (t1 === t2) return "It's a tie!";
+    return `${t1 > t2 ? name1 : name2} wins!`;
+  }
+
+  function showCelebration() {
+    if (celebrationShown) return;
+    celebrationShown = true;
+
+    const overlay = $('celebration-overlay');
+    const canvas  = $('celebration-canvas');
+
+    // Size canvas to viewport
+    canvas.width  = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    $('celebration-text').textContent = getWinnerText();
+    overlay.classList.add('active');
+
+    // Start particle loop
+    particles.length = 0;
+    spawnBurst();
+    fireworksLoop();
+
+    // Schedule recurring bursts every 500ms
+    fireworksBurstTimer = setInterval(spawnBurst, 500);
+  }
+
+  function hideCelebration() {
+    const overlay = $('celebration-overlay');
+    overlay.classList.remove('active');
+
+    // Stop animation
+    if (fireworksRafId !== null) {
+      cancelAnimationFrame(fireworksRafId);
+      fireworksRafId = null;
+    }
+    if (fireworksBurstTimer !== null) {
+      clearInterval(fireworksBurstTimer);
+      fireworksBurstTimer = null;
+    }
+    particles.length = 0;
+
+    // Clear canvas
+    const canvas = $('celebration-canvas');
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+  }
+
+  // Dismiss on click/tap
+  $('celebration-overlay').addEventListener('click', hideCelebration);
 
   // ── Wire up all editable inputs ────────────────────────────────────────────
   function attachListeners() {
