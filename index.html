@@ -361,6 +361,18 @@
     #sync-status.synced   { background: rgba(255,255,255,0.25); color: #fff; }
     #sync-status.syncing  { background: rgba(255,255,255,0.15); color: #ffe; }
     #sync-status.error    { background: rgba(220,50,50,0.5);    color: #fff; }
+
+    /* ── Validation ── */
+    input[type="number"].score-input.invalid {
+      border-color: #dc2828;
+      box-shadow: 0 0 6px rgba(220,40,40,0.7);
+    }
+
+    .calc-cell.invalid {
+      border: 1.5px solid #dc2828;
+      box-shadow: 0 0 6px rgba(220,40,40,0.7);
+    }
+
   </style>
 </head>
 <body>
@@ -482,15 +494,15 @@
         <!-- Three of a Kind -->
         <tr>
           <td class="row-label">Three of a Kind</td>
-          <td class="row-cell"><input class="score-input" id="p1_three_of_a_kind" type="number" min="0" placeholder="—" /></td>
-          <td class="row-cell"><input class="score-input" id="p2_three_of_a_kind" type="number" min="0" placeholder="—" /></td>
+          <td class="row-cell"><input class="score-input" id="p1_three_of_a_kind" type="number" min="0" max="30" placeholder="—" /></td>
+          <td class="row-cell"><input class="score-input" id="p2_three_of_a_kind" type="number" min="0" max="30" placeholder="—" /></td>
         </tr>
 
         <!-- Four of a Kind -->
         <tr>
           <td class="row-label">Four of a Kind</td>
-          <td class="row-cell"><input class="score-input" id="p1_four_of_a_kind" type="number" min="0" placeholder="—" /></td>
-          <td class="row-cell"><input class="score-input" id="p2_four_of_a_kind" type="number" min="0" placeholder="—" /></td>
+          <td class="row-cell"><input class="score-input" id="p1_four_of_a_kind" type="number" min="0" max="30" placeholder="—" /></td>
+          <td class="row-cell"><input class="score-input" id="p2_four_of_a_kind" type="number" min="0" max="30" placeholder="—" /></td>
         </tr>
 
         <!-- Full House -->
@@ -547,8 +559,8 @@
         <!-- Chance -->
         <tr>
           <td class="row-label">Chance</td>
-          <td class="row-cell"><input class="score-input" id="p1_chance" type="number" min="0" placeholder="—" /></td>
-          <td class="row-cell"><input class="score-input" id="p2_chance" type="number" min="0" placeholder="—" /></td>
+          <td class="row-cell"><input class="score-input" id="p1_chance" type="number" min="0" max="30" placeholder="—" /></td>
+          <td class="row-cell"><input class="score-input" id="p2_chance" type="number" min="0" max="30" placeholder="—" /></td>
         </tr>
 
         <!-- Lower Sum -->
@@ -581,6 +593,10 @@
   // Editable field IDs (state keys) — order matters for serialisation
   const UPPER_NUMBER_FIELDS = ['ones', 'twos', 'threes', 'fours', 'fives', 'sixes'];
   const LOWER_NUMBER_FIELDS = ['three_of_a_kind', 'four_of_a_kind', 'chance'];
+  const MAX_VALUES = {
+    ones: 5, twos: 10, threes: 15, fours: 20, fives: 25, sixes: 30,
+    three_of_a_kind: 30, four_of_a_kind: 30, chance: 30
+  };
   const CHECKBOX_FIELDS     = ['full_house', 'small_straight', 'large_straight', 'yahtzee'];
   const CHECKBOX_VALUES     = { full_house: 25, small_straight: 30, large_straight: 40, yahtzee: 50 };
   const YBONUS_FIELDS       = ['ybonus1', 'ybonus2', 'ybonus3', 'ybonus4', 'ybonus5'];
@@ -644,9 +660,44 @@
     });
   }
 
+  function validateInputs() {
+    const validity = { p1: true, p2: true };
+    [...UPPER_NUMBER_FIELDS, ...LOWER_NUMBER_FIELDS].forEach(f => {
+      ['p1', 'p2'].forEach(p => {
+        const el = $(`${p}_${f}`);
+        if (!el) return;
+        const raw = el.value;
+        let invalid = false;
+        if (raw !== '') {
+          const v = parseFloat(raw);
+          if (isNaN(v) || v < 0 || v > MAX_VALUES[f] || !Number.isInteger(v)) {
+            invalid = true;
+          }
+        }
+        el.classList.toggle('invalid', invalid);
+        if (invalid) validity[p] = false;
+      });
+    });
+    return validity;
+  }
+
   function recalculate() {
     updateYahtzeeBonusState();
+    const validity = validateInputs();
+    const COMPUTED_CELLS = ['upper_sum', 'bonus', 'lower_sum', 'grand_total'];
     ['p1', 'p2'].forEach(p => {
+      if (!validity[p]) {
+        COMPUTED_CELLS.forEach(cell => {
+          const el = $(p + '_' + cell);
+          el.textContent = '--';
+          el.classList.add('invalid');
+        });
+        return;
+      }
+      COMPUTED_CELLS.forEach(cell => {
+        $(p + '_' + cell).classList.remove('invalid');
+      });
+
       // Upper sum
       const upperSum = UPPER_NUMBER_FIELDS.reduce((acc, f) => acc + numVal(`${p}_${f}`), 0);
       $(p + '_upper_sum').textContent = upperSum;
@@ -926,8 +977,20 @@
     }
 
     errorEl.textContent = '';
+    joinRoom(code);
+  });
+
+  // Allow pressing Enter in the room code input
+  roomCodeInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter') $('join-btn').click();
+  });
+
+  async function joinRoom(code) {
     roomCode = code;
     $('room-label').textContent = `Room: ${code}`;
+    const url = new URL(window.location);
+    url.searchParams.set('room', code);
+    history.replaceState(null, '', url);
 
     showScreen('scorecard-screen');
     attachListeners();
@@ -936,12 +999,16 @@
 
     await loadLatestState();
     startStreaming();
-  });
+  }
 
-  // Allow pressing Enter in the room code input
-  roomCodeInput.addEventListener('keydown', e => {
-    if (e.key === 'Enter') $('join-btn').click();
-  });
+  // Auto-join if ?room= is in the URL
+  const urlRoom = new URLSearchParams(window.location.search).get('room');
+  if (urlRoom) {
+    const code = urlRoom.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (/^[A-Z0-9]{5}$/.test(code)) {
+      joinRoom(code);
+    }
+  }
 
   // ── Screen Wake Lock ──────────────────────────────────────────────────────
   let wakeLock = null;
