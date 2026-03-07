@@ -362,6 +362,13 @@
     #sync-status.syncing  { background: rgba(255,255,255,0.15); color: #ffe; }
     #sync-status.error    { background: rgba(220,50,50,0.5);    color: #fff; }
 
+    /* ── Header right group ── */
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
     /* ── New Game button ── */
     #new-game-btn {
       font-size: 0.75rem;
@@ -436,8 +443,10 @@
   <div class="scorecard-header">
     <h1>🎲 Yahtzee</h1>
     <span id="room-label"></span>
-    <button id="new-game-btn" type="button">New Game</button>
-    <span id="sync-status" class="synced">●&nbsp;Live</span>
+    <div class="header-right">
+      <button id="new-game-btn" type="button">+</button>
+      <span id="sync-status" class="synced">●&nbsp;Live</span>
+    </div>
   </div>
 
   <div class="scorecard-wrap">
