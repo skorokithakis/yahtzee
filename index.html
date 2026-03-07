@@ -1116,7 +1116,7 @@
     showScreen('scorecard-screen');
     attachListeners();
     recalculate();
-    requestWakeLock();
+    acquireWakeLockOnNextGesture();
 
     await loadLatestState();
     startStreaming();
@@ -1142,9 +1142,16 @@
     } catch (_) {}
   }
 
+  // Defer wake lock acquisition to the next user gesture (required on iOS Safari).
+  function acquireWakeLockOnNextGesture() {
+    document.addEventListener('pointerdown', function () {
+      requestWakeLock();
+    }, { once: true });
+  }
+
   // Re-acquire wake lock when tab becomes visible again
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible' && roomCode) requestWakeLock();
+    if (document.visibilityState === 'visible' && roomCode) acquireWakeLockOnNextGesture();
   });
 
 })();
