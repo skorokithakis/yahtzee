@@ -269,6 +269,44 @@
       height: 16px;
     }
 
+    /* ── Tri-state toggle ── */
+    .tri-toggle {
+      width: 28px;
+      height: 28px;
+      border: 2px solid #bbb;
+      border-radius: 6px;
+      background: #fff;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      font-weight: 700;
+      line-height: 1;
+      padding: 0;
+      color: transparent;
+      transition: border-color 0.15s, background 0.15s;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+
+    .tri-toggle:focus-visible {
+      outline: 2px solid #4a90e2;
+      outline-offset: 2px;
+    }
+
+    .tri-toggle[data-state="checked"] {
+      border-color: #4a90e2;
+      background: #e8f0fb;
+      color: #4a90e2;
+    }
+
+    .tri-toggle[data-state="crossed"] {
+      border-color: #c0392b;
+      background: #fdecea;
+      color: #c0392b;
+    }
+
     /* ── Read-only / calculated cells ── */
     .calc-cell {
       background: #ececec;
@@ -453,29 +491,29 @@
         <!-- Full House -->
         <tr>
           <td class="row-label">Full House <small>(25)</small></td>
-          <td class="row-cell"><div class="checkbox-wrap"><input class="score-check" id="p1_full_house" type="checkbox" /></div></td>
-          <td class="row-cell"><div class="checkbox-wrap"><input class="score-check" id="p2_full_house" type="checkbox" /></div></td>
+          <td class="row-cell"><div class="checkbox-wrap"><button class="tri-toggle" id="p1_full_house" data-state="empty" type="button"></button></div></td>
+          <td class="row-cell"><div class="checkbox-wrap"><button class="tri-toggle" id="p2_full_house" data-state="empty" type="button"></button></div></td>
         </tr>
 
         <!-- Small Straight -->
         <tr>
           <td class="row-label">Sm. Straight <small>(30)</small></td>
-          <td class="row-cell"><div class="checkbox-wrap"><input class="score-check" id="p1_small_straight" type="checkbox" /></div></td>
-          <td class="row-cell"><div class="checkbox-wrap"><input class="score-check" id="p2_small_straight" type="checkbox" /></div></td>
+          <td class="row-cell"><div class="checkbox-wrap"><button class="tri-toggle" id="p1_small_straight" data-state="empty" type="button"></button></div></td>
+          <td class="row-cell"><div class="checkbox-wrap"><button class="tri-toggle" id="p2_small_straight" data-state="empty" type="button"></button></div></td>
         </tr>
 
         <!-- Large Straight -->
         <tr>
           <td class="row-label">Lg. Straight <small>(40)</small></td>
-          <td class="row-cell"><div class="checkbox-wrap"><input class="score-check" id="p1_large_straight" type="checkbox" /></div></td>
-          <td class="row-cell"><div class="checkbox-wrap"><input class="score-check" id="p2_large_straight" type="checkbox" /></div></td>
+          <td class="row-cell"><div class="checkbox-wrap"><button class="tri-toggle" id="p1_large_straight" data-state="empty" type="button"></button></div></td>
+          <td class="row-cell"><div class="checkbox-wrap"><button class="tri-toggle" id="p2_large_straight" data-state="empty" type="button"></button></div></td>
         </tr>
 
         <!-- Yahtzee -->
         <tr>
           <td class="row-label">Yahtzee <small>(50)</small></td>
-          <td class="row-cell"><div class="checkbox-wrap"><input class="score-check" id="p1_yahtzee" type="checkbox" /></div></td>
-          <td class="row-cell"><div class="checkbox-wrap"><input class="score-check" id="p2_yahtzee" type="checkbox" /></div></td>
+          <td class="row-cell"><div class="checkbox-wrap"><button class="tri-toggle" id="p1_yahtzee" data-state="empty" type="button"></button></div></td>
+          <td class="row-cell"><div class="checkbox-wrap"><button class="tri-toggle" id="p2_yahtzee" data-state="empty" type="button"></button></div></td>
         </tr>
 
         <!-- Yahtzee Bonus -->
@@ -575,7 +613,15 @@
 
   function checkVal(id) {
     const el = $(id);
-    return el && el.checked ? 1 : 0;
+    return el && el.dataset.state === 'checked' ? 1 : 0;
+  }
+
+  // Tri-state toggle: empty → checked → crossed → empty
+  function cycleTriState(el) {
+    const cur = el.dataset.state;
+    const next = cur === 'empty' ? 'checked' : cur === 'checked' ? 'crossed' : 'empty';
+    el.dataset.state = next;
+    el.textContent = next === 'checked' ? '✓' : next === 'crossed' ? '✕' : '';
   }
 
   function recalculate() {
@@ -615,7 +661,8 @@
     });
     CHECKBOX_FIELDS.forEach(f => {
       ['p1', 'p2'].forEach(p => {
-        state[`${p}_${f}`] = $(`${p}_${f}`).checked ? '1' : '0';
+        const s = $(`${p}_${f}`).dataset.state;
+        state[`${p}_${f}`] = s === 'checked' ? '1' : s === 'crossed' ? 'X' : '';
       });
     });
     YBONUS_FIELDS.forEach(f => {
@@ -641,7 +688,14 @@
       CHECKBOX_FIELDS.forEach(f => {
         ['p1', 'p2'].forEach(p => {
           const key = `${p}_${f}`;
-          if (state[key] !== undefined) $(`${p}_${f}`).checked = state[key] === '1' || state[key] === true || state[key] === 1;
+          if (state[key] !== undefined) {
+            const el = $(`${p}_${f}`);
+            const v = state[key];
+            // Backwards compat: '1'/true/1 = checked, 'X' = crossed, anything else = empty
+            const s = (v === '1' || v === true || v === 1) ? 'checked' : v === 'X' ? 'crossed' : 'empty';
+            el.dataset.state = s;
+            el.textContent = s === 'checked' ? '✓' : s === 'crossed' ? '✕' : '';
+          }
         });
       });
       YBONUS_FIELDS.forEach(f => {
@@ -813,10 +867,13 @@
       if (el) el.addEventListener('input', onInputChange);
     });
 
-    // Checkboxes
+    // Tri-state toggles
     CHECKBOX_FIELDS.flatMap(f => [`p1_${f}`, `p2_${f}`]).forEach(id => {
       const el = $(id);
-      if (el) el.addEventListener('change', onInputChange);
+      if (el) el.addEventListener('click', () => {
+        cycleTriState(el);
+        onInputChange();
+      });
     });
 
     // Yahtzee bonus checkboxes
