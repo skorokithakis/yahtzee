@@ -373,6 +373,17 @@
       box-shadow: 0 0 6px rgba(220,40,40,0.7);
     }
 
+    /* ── Active turn highlight ── */
+    thead th.active-turn {
+      background: #d4edda;
+      border-bottom-color: #27ae60;
+      box-shadow: inset 0 -3px 0 #27ae60;
+    }
+
+    thead th.active-turn .player-name-input {
+      color: #1a7a40;
+    }
+
   </style>
 </head>
 <body>
@@ -608,6 +619,7 @@
   let debounceTimer = null;
   let streamReader = null;
   let lastPostTime = 0;
+  let lastFilledPlayer = null;
 
   // ── DOM helpers ────────────────────────────────────────────────────────────
   const $ = id => document.getElementById(id);
@@ -681,6 +693,49 @@
     return validity;
   }
 
+  // ── Active turn detection ──────────────────────────────────────────────────
+  function countFilledCells(player) {
+    let count = 0;
+    [...UPPER_NUMBER_FIELDS, ...LOWER_NUMBER_FIELDS].forEach(f => {
+      const el = $(`${player}_${f}`);
+      if (el && el.value !== '') count++;
+    });
+    CHECKBOX_FIELDS.forEach(f => {
+      const el = $(`${player}_${f}`);
+      if (el && el.dataset.state !== 'empty') count++;
+    });
+    YBONUS_FIELDS.forEach(f => {
+      const el = $(`${player}_${f}`);
+      if (el && el.checked) count++;
+    });
+    return count;
+  }
+
+  function updateActivePlayer() {
+    const c1 = countFilledCells('p1');
+    const c2 = countFilledCells('p2');
+    let active = null;
+
+    if (c1 < c2) {
+      active = 'p1';
+    } else if (c2 < c1) {
+      active = 'p2';
+    } else {
+      // Tied — use lastFilledPlayer to determine who just went
+      if (lastFilledPlayer === 'p1') {
+        active = 'p2';
+      } else if (lastFilledPlayer === 'p2') {
+        active = 'p1';
+      }
+      // else: unknown — no highlight
+    }
+
+    const th1 = $('p1_name').closest('th');
+    const th2 = $('p2_name').closest('th');
+    if (th1) th1.classList.toggle('active-turn', active === 'p1');
+    if (th2) th2.classList.toggle('active-turn', active === 'p2');
+  }
+
   function recalculate() {
     updateYahtzeeBonusState();
     const validity = validateInputs();
@@ -718,6 +773,7 @@
       // Grand total
       $(p + '_grand_total').textContent = upperSum + bonus + lowerSum;
     });
+    updateActivePlayer();
   }
 
   // ── State serialisation ────────────────────────────────────────────────────
@@ -746,6 +802,8 @@
   }
 
   function applyState(state) {
+    const beforeP1 = countFilledCells('p1');
+    const beforeP2 = countFilledCells('p2');
     isApplyingRemote = true;
     try {
       NAME_FIELDS.forEach(key => {
@@ -776,6 +834,15 @@
           if (state[key] !== undefined) $(`${p}_${f}`).checked = state[key] === '1' || state[key] === true || state[key] === 1;
         });
       });
+      const afterP1 = countFilledCells('p1');
+      const afterP2 = countFilledCells('p2');
+      const gainedP1 = afterP1 > beforeP1;
+      const gainedP2 = afterP2 > beforeP2;
+      if (gainedP1 && !gainedP2) {
+        lastFilledPlayer = 'p1';
+      } else if (gainedP2 && !gainedP1) {
+        lastFilledPlayer = 'p2';
+      }
       recalculate();
     } finally {
       isApplyingRemote = false;
@@ -921,8 +988,11 @@
   }
 
   // ── Input change handler ───────────────────────────────────────────────────
-  function onInputChange() {
+  function onInputChange(fieldId) {
     if (isApplyingRemote) return;
+    if (fieldId && (fieldId.startsWith('p1_') || fieldId.startsWith('p2_'))) {
+      lastFilledPlayer = fieldId.startsWith('p1_') ? 'p1' : 'p2';
+    }
     recalculate();
     clearTimeout(debounceTimer);
     debounceTimer = setTimeout(postState, DEBOUNCE_MS);
@@ -936,7 +1006,7 @@
      ...LOWER_NUMBER_FIELDS.flatMap(f => [`p1_${f}`, `p2_${f}`]),
     ].forEach(id => {
       const el = $(id);
-      if (el) el.addEventListener('input', onInputChange);
+      if (el) el.addEventListener('input', () => onInputChange(id));
     });
 
     // Tri-state toggles
@@ -944,14 +1014,14 @@
       const el = $(id);
       if (el) el.addEventListener('click', () => {
         cycleTriState(el);
-        onInputChange();
+        onInputChange(id);
       });
     });
 
     // Yahtzee bonus checkboxes
     YBONUS_FIELDS.flatMap(f => [`p1_${f}`, `p2_${f}`]).forEach(id => {
       const el = $(id);
-      if (el) el.addEventListener('change', onInputChange);
+      if (el) el.addEventListener('change', () => onInputChange(id));
     });
   }
 
