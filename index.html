@@ -269,6 +269,11 @@
       height: 16px;
     }
 
+    input[type="checkbox"].score-check.yb:disabled {
+      cursor: not-allowed;
+      opacity: 0.3;
+    }
+
     /* ── Tri-state toggle ── */
     .tri-toggle {
       width: 28px;
@@ -624,7 +629,23 @@
     el.textContent = next === 'checked' ? '✓' : next === 'crossed' ? '✕' : '';
   }
 
+  function updateYahtzeeBonusState() {
+    ['p1', 'p2'].forEach(p => {
+      const yahtzeeChecked = $(`${p}_yahtzee`).dataset.state === 'checked';
+      YBONUS_FIELDS.forEach(f => {
+        const el = $(`${p}_${f}`);
+        if (!yahtzeeChecked) {
+          el.disabled = true;
+          el.checked = false;
+        } else {
+          el.disabled = false;
+        }
+      });
+    });
+  }
+
   function recalculate() {
+    updateYahtzeeBonusState();
     ['p1', 'p2'].forEach(p => {
       // Upper sum
       const upperSum = UPPER_NUMBER_FIELDS.reduce((acc, f) => acc + numVal(`${p}_${f}`), 0);
@@ -639,7 +660,7 @@
       // Lower sum
       const lowerNum = LOWER_NUMBER_FIELDS.reduce((acc, f) => acc + numVal(`${p}_${f}`), 0);
       const lowerCheck = CHECKBOX_FIELDS.reduce((acc, f) => acc + checkVal(`${p}_${f}`) * CHECKBOX_VALUES[f], 0);
-      const yahtzeeBonus = YBONUS_FIELDS.reduce((acc, f) => acc + checkVal(`${p}_${f}`) * 100, 0);
+      const yahtzeeBonus = YBONUS_FIELDS.reduce((acc, f) => { const el = $(`${p}_${f}`); return acc + (el && el.checked ? 100 : 0); }, 0);
       const lowerSum = lowerNum + lowerCheck + yahtzeeBonus;
       $(p + '_lower_sum').textContent = lowerSum;
 
