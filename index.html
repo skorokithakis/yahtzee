@@ -442,6 +442,14 @@
       pointer-events: none;
     }
 
+    #celebration-die {
+      position: relative;
+      z-index: 1;
+      font-size: clamp(4rem, 15vw, 8rem);
+      line-height: 1;
+      margin-bottom: 12px;
+    }
+
     #celebration-text {
       position: relative;
       z-index: 1;
@@ -685,6 +693,7 @@
 ══════════════════════════════════════════ -->
 <div id="celebration-overlay" role="dialog" aria-modal="true" aria-label="Game over celebration">
   <canvas id="celebration-canvas"></canvas>
+  <div id="celebration-die">🎲</div>
   <div id="celebration-text"></div>
   <div id="celebration-dismiss">Tap to dismiss</div>
 </div>
