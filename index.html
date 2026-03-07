@@ -1135,16 +1135,28 @@
   let wakeLock = null;
 
   async function requestWakeLock() {
-    if (!('wakeLock' in navigator)) return;
+    console.log('[WakeLock] Attempting...', 'wakeLock' in navigator);
+    if (!('wakeLock' in navigator)) {
+      console.warn('[WakeLock] API not available');
+      return;
+    }
     try {
       wakeLock = await navigator.wakeLock.request('screen');
-      wakeLock.addEventListener('release', () => { wakeLock = null; });
-    } catch (_) {}
+      console.log('[WakeLock] Acquired successfully');
+      wakeLock.addEventListener('release', () => {
+        console.warn('[WakeLock] Released!', new Error().stack);
+        wakeLock = null;
+      });
+    } catch (e) {
+      console.error('[WakeLock] Failed:', e.name, e.message);
+    }
   }
 
   // Defer wake lock acquisition to the next user gesture (required on iOS Safari).
   function acquireWakeLockOnNextGesture() {
+    console.log('[WakeLock] Registering pointerdown listener');
     document.addEventListener('pointerdown', function () {
+      console.log('[WakeLock] pointerdown fired, requesting wake lock');
       requestWakeLock();
     }, { once: true });
   }
