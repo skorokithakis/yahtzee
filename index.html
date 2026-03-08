@@ -389,6 +389,11 @@
       background: rgba(255,255,255,0.1);
     }
 
+    /* ── Last-changed highlight ── */
+    .last-changed {
+      box-shadow: 0 0 8px rgba(74,144,226,0.8);
+    }
+
     /* ── Validation ── */
     input[type="number"].score-input.invalid {
       border-color: #dc2828;
@@ -732,6 +737,7 @@
   let celebrationTimer = null;
   let streamBackoff = STREAM_BACKOFF_INITIAL;
   let streamReconnectTimer = null;
+  let lastChangedEl = null;
 
   // ── DOM helpers ────────────────────────────────────────────────────────────
   const $ = id => document.getElementById(id);
@@ -746,6 +752,13 @@
     el.className = state;
     const labels = { synced: '● Live', syncing: '↑ Syncing…', error: '✕ Error', reconnecting: '↻ Reconnecting…' };
     el.textContent = labels[state] || '● Live';
+  }
+
+  // ── Last-changed highlight ─────────────────────────────────────────────────
+  function highlightLastChanged(el) {
+    if (lastChangedEl) lastChangedEl.classList.remove('last-changed');
+    el.classList.add('last-changed');
+    lastChangedEl = el;
   }
 
   // ── Score calculation ──────────────────────────────────────────────────────
@@ -925,6 +938,28 @@
   function applyState(state) {
     const beforeP1 = countFilledCells('p1');
     const beforeP2 = countFilledCells('p2');
+
+    // Snapshot current score field values before applying remote state
+    const snapshot = {};
+    [...UPPER_NUMBER_FIELDS, ...LOWER_NUMBER_FIELDS].forEach(f => {
+      ['p1', 'p2'].forEach(p => {
+        const id = `${p}_${f}`;
+        snapshot[id] = $(id).value;
+      });
+    });
+    CHECKBOX_FIELDS.forEach(f => {
+      ['p1', 'p2'].forEach(p => {
+        const id = `${p}_${f}`;
+        snapshot[id] = $(id).dataset.state;
+      });
+    });
+    YBONUS_FIELDS.forEach(f => {
+      ['p1', 'p2'].forEach(p => {
+        const id = `${p}_${f}`;
+        snapshot[id] = $(`${p}_${f}`).checked;
+      });
+    });
+
     isApplyingRemote = true;
     try {
       NAME_FIELDS.forEach(key => {
@@ -964,6 +999,29 @@
       } else if (gainedP2 && !gainedP1) {
         lastFilledPlayer = 'p2';
       }
+
+      // Diff score fields against snapshot; highlight the last one that changed
+      let changedEl = null;
+      [...UPPER_NUMBER_FIELDS, ...LOWER_NUMBER_FIELDS].forEach(f => {
+        ['p1', 'p2'].forEach(p => {
+          const id = `${p}_${f}`;
+          if ($(id).value !== snapshot[id]) changedEl = $(id);
+        });
+      });
+      CHECKBOX_FIELDS.forEach(f => {
+        ['p1', 'p2'].forEach(p => {
+          const id = `${p}_${f}`;
+          if ($(id).dataset.state !== snapshot[id]) changedEl = $(id);
+        });
+      });
+      YBONUS_FIELDS.forEach(f => {
+        ['p1', 'p2'].forEach(p => {
+          const id = `${p}_${f}`;
+          if ($(`${p}_${f}`).checked !== snapshot[id]) changedEl = $(`${p}_${f}`);
+        });
+      });
+      if (changedEl) highlightLastChanged(changedEl);
+
       recalculate();
     } finally {
       isApplyingRemote = false;
@@ -1131,6 +1189,10 @@
     if (fieldId && (fieldId.startsWith('p1_') || fieldId.startsWith('p2_'))) {
       lastFilledPlayer = fieldId.startsWith('p1_') ? 'p1' : 'p2';
     }
+    if (fieldId && !NAME_FIELDS.includes(fieldId)) {
+      const el = $(fieldId);
+      if (el) highlightLastChanged(el);
+    }
     recalculate();
     clearTimeout(debounceTimer);
     debounceTimer = setTimeout(postState, DEBOUNCE_MS);
@@ -1143,6 +1205,11 @@
     clearTimeout(celebrationTimer);
     hideCelebration();
     celebrationShown = false;
+
+    if (lastChangedEl) {
+      lastChangedEl.classList.remove('last-changed');
+      lastChangedEl = null;
+    }
 
     ['p1', 'p2'].forEach(p => {
       UPPER_NUMBER_FIELDS.forEach(f => { $(`${p}_${f}`).value = ''; });
